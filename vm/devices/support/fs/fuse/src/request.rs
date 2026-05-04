@@ -299,6 +299,44 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn parse_init_extended_preserves_flags2() {
+        // Build a full 64-byte extended FUSE_INIT payload with FUSE_INIT_EXT
+        // set in flags and a non-zero flags2.
+        let init_in = fuse_init_in {
+            major: 7,
+            minor: 39,
+            max_readahead: 131072,
+            flags: FUSE_INIT_EXT,
+            flags2: FUSE_DIRECT_IO_ALLOW_MMAP_FLAG2,
+            unused: [0; 11],
+        };
+        let header = fuse_in_header {
+            len: (size_of::<fuse_in_header>() + size_of::<fuse_init_in>()) as u32,
+            opcode: FUSE_INIT,
+            unique: 1,
+            nodeid: 0,
+            uid: 0,
+            gid: 0,
+            pid: 0,
+            padding: 0,
+        };
+        let mut data = Vec::new();
+        data.extend_from_slice(header.as_bytes());
+        data.extend_from_slice(init_in.as_bytes());
+        let request = Request::new(data.as_slice()).unwrap();
+        check_header(&request, 1, FUSE_INIT, 0);
+        if let FuseOperation::Init { arg } = request.operation {
+            assert_eq!(arg.major, 7);
+            assert_eq!(arg.minor, 39);
+            assert_eq!(arg.max_readahead, 131072);
+            assert_eq!(arg.flags, FUSE_INIT_EXT);
+            assert_eq!(arg.flags2, FUSE_DIRECT_IO_ALLOW_MMAP_FLAG2);
+        } else {
+            panic!("Incorrect operation {:?}", request.operation);
+        }
+    }
+
+    #[test]
     fn parse_get_attr() {
         let request = Request::new(FUSE_GETATTR_REQUEST).unwrap();
         check_header(&request, 2, FUSE_GETATTR, 1);
